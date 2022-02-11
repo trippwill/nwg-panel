@@ -50,9 +50,11 @@ from nwg_panel.modules.menu_start import MenuStart
 dir_name = os.path.dirname(__file__)
 
 from nwg_panel import common
+
 tray_available = False
 try:
     from nwg_panel.modules import sni_system_tray
+
     tray_available = True
 except:
     print("Couldn't load system tray, is 'python-dbus' installed?", file=sys.stderr)
@@ -71,6 +73,7 @@ if sway:
 
 restart_cmd = ""
 sig_dwl = 0
+sig_tree = 0
 
 
 def signal_handler(sig, frame):
@@ -83,47 +86,36 @@ def signal_handler(sig, frame):
         Gtk.main_quit()
     elif sig == sig_dwl:
         refresh_dwl()
+    elif sig == sig_tree:
+        on_sig_tree()
 
 
 def restart():
     subprocess.Popen(restart_cmd, shell=True)
 
 
-def check_tree():
+def on_sig_tree():
+    print("on_sig_tree")
     tree = common.i3.get_tree() if sway else None
     if tree:
-        # Do if tree changed
-        if tree.ipc_data != common.ipc_data:
-            if len(common.i3.get_outputs()) != common.outputs_num:
-                print("Number of outputs changed")
-                restart()
-
-            for item in common.taskbars_list:
-                item.refresh(tree)
-
-            for item in common.scratchpads_list:
-                item.refresh(tree)
-
-            for item in common.workspaces_list:
-                item.refresh()
-
-            for item in common.controls_list:
-                if item.popup_window.get_visible():
-                    item.popup_window.hide()
-
-        common.ipc_data = tree.ipc_data
-
-    else:
-        pass
-        """ For now we seem to have no reason to trace it outside sway
-        old = len(common.outputs)
-        common.outputs = list_outputs(sway=sway, tree=tree, silent=True)
-        new = len(common.outputs)
-        if old != 0 and old != new:
+        if len(common.i3.get_outputs()) != common.outputs_num:
             print("Number of outputs changed")
-            restart()"""
+            restart()
 
-    return True
+        for item in common.taskbars_list:
+            item.refresh(tree)
+
+        for item in common.scratchpads_list:
+            item.refresh(tree)
+
+        for item in common.workspaces_list:
+            item.refresh()
+
+        for item in common.controls_list:
+            if item.popup_window.get_visible():
+                item.popup_window.hide()
+
+        # common.ipc_data = tree.ipc_data
 
 
 def refresh_dwl(*args):
@@ -261,6 +253,11 @@ def main():
                         default=10,
                         help="signal to refresh dwl-tags module; default: 10 (SIGUSR1)")
 
+    parser.add_argument("-sigtree",
+                        type=int,
+                        default=12,
+                        help="signal to refresh sway-specific modules; default: 12 (SIGUSR2)")
+
     parser.add_argument("-r",
                         "--restore",
                         action="store_true",
@@ -276,6 +273,9 @@ def main():
 
     global sig_dwl
     sig_dwl = args.sigdwl
+
+    global sig_tree
+    sig_tree = args.sigtree
 
     catchable_sigs = set(signal.Signals) - {signal.SIGKILL, signal.SIGSTOP}
     for sig in catchable_sigs:
@@ -371,7 +371,7 @@ def main():
                 display = Gdk.Display.get_default()
                 monitor = display.get_monitor(0)
                 for key in common.outputs:
-                    if common.outputs[key]["monitor"] == monitor:
+                    if "monitor" in common.outputs[key] and common.outputs[key]["monitor"] == monitor:
                         panel["output"] = key
 
             # Width undefined or "auto"
@@ -420,7 +420,7 @@ def main():
                 }
                 for key in defaults:
                     check_key(panel["menu-start-settings"], key, defaults[key])
-            
+
             if panel["menu-start"] != "off":
                 panel["menu-start-settings"]["horizontal-align"] = panel["menu-start"]
 
@@ -554,7 +554,6 @@ def main():
     else:
         common.outputs = list_outputs(sway=sway, tree=tree, silent=True)
         common.outputs_num = len(common.outputs)
-    Gdk.threads_add_timeout(GLib.PRIORITY_DEFAULT_IDLE, 200, check_tree)
 
     if tray_available and len(common.tray_list) > 0:
         sni_system_tray.init_tray(common.tray_list)
