@@ -255,8 +255,8 @@ def main():
 
     parser.add_argument("-sigtree",
                         type=int,
-                        default=12,
-                        help="signal to refresh sway-specific modules; default: 12 (SIGUSR2)")
+                        default=14,
+                        help="signal to refresh sway-specific modules; default: 14 (SIGUSR2)")
 
     parser.add_argument("-r",
                         "--restore",
